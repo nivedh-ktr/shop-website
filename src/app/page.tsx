@@ -8,14 +8,24 @@ import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
 import CartDrawer from "@/components/CartDrawer";
 import WishlistDrawer from "@/components/WishlistDrawer";
+import { supabase } from "@/utils/supabase";
 
-export default function Home() {
+export const revalidate = 0;
+
+export default async function Home() {
+  const { data: featuredProducts } = await supabase
+    .from('products')
+    .select('id, title, price, discount_price, images, image_url, category')
+    .eq('is_featured', true)
+    .order('created_at', { ascending: false })
+    .limit(8);
+
   return (
     <main className="min-h-screen">
       <Header />
       <Hero />
       <CategoryBrowser />
-      <ProductGrid />
+      <ProductGrid featuredProducts={featuredProducts || []} />
       <SocialProof />
       <TestimonialHub />
       <Footer />

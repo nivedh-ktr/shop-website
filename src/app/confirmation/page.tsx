@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import gsap from "gsap";
 import Header from "@/components/Header";

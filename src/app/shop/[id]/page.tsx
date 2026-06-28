@@ -3,17 +3,35 @@
 import { useEffect, useRef, useState, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronRight, Star, Heart, Minus, Plus, Share2 } from "lucide-react";
+import { ChevronRight, Star, Heart, Minus, Plus, Share2, Loader2, Info } from "lucide-react";
 import gsap from "gsap";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
 import CartDrawer from "@/components/CartDrawer";
 import WishlistDrawer from "@/components/WishlistDrawer";
-import { products } from "@/utils/products";
+import { products as staticProducts } from "@/utils/products";
 import { useAppContext } from "@/context/AppContext";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
+import { supabase } from "@/utils/supabase";
+
+interface SupabaseProduct {
+  id: string;
+  title: string;
+  price: number;
+  discount_price: number | null;
+  category: string;
+  image_url: string; // Legacy fallback
+  images?: string[];
+  description?: string;
+  stock_quantity: number;
+  sku: string | null;
+  dimensions: string | null;
+  primary_material: string | null;
+  specifications: Record<string, string>;
+  created_at: string;
+}
 
 export default function ProductDetailPage({ 
   params,
@@ -24,9 +42,12 @@ export default function ProductDetailPage({
 }) {
   const resolvedParams = use(params);
   const resolvedSearchParams = use(searchParams);
-  const productId = parseInt(resolvedParams.id, 10);
+  const productId = resolvedParams.id;
   const refSlug = resolvedSearchParams.ref as string | undefined;
-  const product = products.find(p => p.id === productId);
+  
+  const [product, setProduct] = useState<SupabaseProduct | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
 
   const categoryDictionary: Record<string, string> = {
     "living-room": "Living Room Collection",
@@ -35,26 +56,72 @@ export default function ProductDetailPage({
     "office": "Home Office Space",
   };
 
-  const breadcrumbCategoryName = refSlug && categoryDictionary[refSlug] ? categoryDictionary[refSlug] : "Shop";
+  const breadcrumbCategoryName = refSlug && categoryDictionary[refSlug] ? categoryDictionary[refSlug] : product?.category || "Shop";
   const breadcrumbCategoryLink = refSlug ? `/category/${refSlug}` : "/collections";
 
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [activeSize, setActiveSize] = useState<string | null>(null);
-  const [activeColor, setActiveColor] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("Description");
   
   const { addToCart, toggleWishlist, wishlist } = useAppContext();
   const pageRef = useRef<HTMLDivElement>(null);
   const mainImageRef = useRef<HTMLImageElement>(null);
 
-  // Initialize selected size/color if available
+  // Fetch product from Supabase
   useEffect(() => {
-    if (product) {
-      if (product.sizes && product.sizes.length > 0) setActiveSize(product.sizes[0]);
-      if (product.colors && product.colors.length > 0) setActiveColor(product.colors[0].name);
+    async function fetchProduct() {
+      setLoading(true);
+      
+      // Try fetching from Supabase first
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', productId)
+        .single();
+        
+      if (!error && data) {
+        setProduct(data as SupabaseProduct);
+        
+        // Fetch related products from Supabase
+        const { data: relatedData } = await supabase
+          .from('products')
+          .select('*')
+          .eq('category', data.category)
+          .neq('id', data.id)
+          .limit(4);
+          
+        if (relatedData) setRelatedProducts(relatedData);
+      } else {
+        // Fallback for static demo products (which have integer IDs)
+        const staticId = parseInt(productId, 10);
+        if (!isNaN(staticId)) {
+          const sp = staticProducts.find(p => p.id === staticId);
+          if (sp) {
+            // Map static product to Supabase schema format for rendering
+            setProduct({
+              id: String(sp.id),
+              title: sp.name,
+              price: sp.priceValue,
+              discount_price: null,
+              category: sp.category || 'Living Room',
+              image_url: sp.image,
+              images: sp.images || [sp.image],
+              description: sp.desc || '',
+              stock_quantity: 10,
+              sku: sp.sku || `KF-${sp.id}`,
+              dimensions: null,
+              primary_material: null,
+              specifications: {},
+              created_at: new Date().toISOString(),
+            });
+            setRelatedProducts(staticProducts.filter(p => p.category === sp.category && p.id !== sp.id).slice(0, 4));
+          }
+        }
+      }
+      setLoading(false);
     }
-  }, [product]);
+    fetchProduct();
+  }, [productId]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && (window as any).lenis) {
@@ -63,21 +130,21 @@ export default function ProductDetailPage({
       window.scrollTo(0, 0);
     }
 
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        ".product-animate",
-        { y: 40, opacity: 0 },
-        { y: 0, opacity: 1, duration: 1, stagger: 0.08, ease: "power4.out" }
-      );
-    }, pageRef);
-
-    return () => ctx.revert();
-  }, []);
+    if (!loading && product) {
+      const ctx = gsap.context(() => {
+        gsap.fromTo(
+          ".product-animate",
+          { y: 40, opacity: 0 },
+          { y: 0, opacity: 1, duration: 1, stagger: 0.08, ease: "power4.out" }
+        );
+      }, pageRef);
+      return () => ctx.revert();
+    }
+  }, [loading, product]);
 
   const handleImageSwitch = (index: number) => {
     if (index === activeImage) return;
     if (mainImageRef.current) {
-      // Apple-style cross-fade and scale transition
       gsap.fromTo(
         mainImageRef.current,
         { opacity: 0.4, scale: 0.97 },
@@ -97,8 +164,8 @@ export default function ProductDetailPage({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: product?.name,
-          text: `Check out ${product?.name} at Krishna Furniture!`,
+          title: product?.title,
+          text: `Check out ${product?.title} at Krishna Furniture!`,
           url: window.location.href,
         });
       } catch (err) {
@@ -110,6 +177,15 @@ export default function ProductDetailPage({
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <Header />
+        <Loader2 className="w-8 h-8 animate-spin text-neutral-400" />
+      </div>
+    );
+  }
+
   if (!product) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50">
@@ -120,8 +196,15 @@ export default function ProductDetailPage({
     );
   }
 
-  const galleryImages = product.images || [product.image];
-  const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const galleryImages = product.images && product.images.length > 0 
+    ? product.images 
+    : [product.image_url]; // Fallback to legacy
+    
+  const formatPrice = (val: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+  
+  const hasDynamicSpecs = product.specifications && Object.keys(product.specifications).length > 0;
+  const hasPhysicalSpecs = product.dimensions || product.primary_material;
+  const showSpecsSection = hasPhysicalSpecs || hasDynamicSpecs;
 
   return (
     <main ref={pageRef} className="min-h-screen pt-24 bg-white overflow-hidden">
@@ -134,7 +217,7 @@ export default function ProductDetailPage({
           <ChevronRight className="w-4 h-4 text-neutral-400" />
           <Link href={breadcrumbCategoryLink} className="text-neutral-500 hover:text-neutral-900 transition-colors">{breadcrumbCategoryName}</Link>
           <ChevronRight className="w-4 h-4 text-neutral-400" />
-          <span className="text-neutral-900 font-medium border-l-2 border-neutral-300 pl-4 ml-2">{product.name}</span>
+          <span className="text-neutral-900 font-medium border-l-2 border-neutral-300 pl-4 ml-2 truncate max-w-[200px]">{product.title}</span>
         </div>
       </div>
 
@@ -162,7 +245,7 @@ export default function ProductDetailPage({
               <Image 
                 ref={mainImageRef}
                 src={galleryImages[activeImage]} 
-                alt={product.name} 
+                alt={product.title} 
                 fill 
                 className="object-cover"
                 priority
@@ -172,60 +255,51 @@ export default function ProductDetailPage({
 
           {/* Right: Product Info */}
           <div className="w-full lg:w-1/2 flex flex-col product-animate">
-            <h1 className="text-4xl lg:text-5xl font-serif text-neutral-900 tracking-wide mb-2">{product.name}</h1>
-            <p className="text-2xl font-medium text-neutral-500 mb-4">{product.price}</p>
-            
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex text-[#FFC700]">
-                {[...Array(4)].map((_, i) => <Star key={i} className="w-5 h-5 fill-current" />)}
-                <Star className="w-5 h-5 fill-current opacity-50" />
-              </div>
-              <span className="text-neutral-400 text-sm border-l border-neutral-300 pl-4">5 Customer Review</span>
+            <h1 className="text-4xl lg:text-5xl font-serif text-neutral-900 tracking-wide mb-2">{product.title}</h1>
+            <div className="flex items-center gap-3 mb-4">
+              <p className="text-2xl font-medium text-neutral-900">{formatPrice(product.price)}</p>
+              {product.discount_price && (
+                <p className="text-lg text-neutral-400 line-through">{formatPrice(product.discount_price)}</p>
+              )}
             </div>
             
-            <p className="text-neutral-600 mb-8 max-w-lg text-sm md:text-base leading-relaxed">
-              Setting the bar as one of the loudest speakers in its class, the {product.name} is a compact, stout-hearted hero with a well-balanced audio which boasts a clear midrange and extended highs for a sound that is both articulate and pronounced.
+
+            
+            <p className="text-neutral-600 mb-8 max-w-lg text-sm md:text-base leading-relaxed whitespace-pre-wrap">
+              {product.description || `Setting the bar as one of the finest pieces in its class, the ${product.title} is a beautiful, stout-hearted addition to any space. Designed with premium materials and aesthetic appeal that brings timeless elegance to your home.`}
             </p>
 
-            {/* Size Variants */}
-            {product.sizes && (
-              <div className="mb-6">
-                <h4 className="text-sm font-medium text-neutral-400 mb-3">Size</h4>
-                <div className="flex gap-3">
-                  {product.sizes.map((size) => (
-                    <button 
-                      key={size}
-                      onClick={() => setActiveSize(size)}
-                      className={cn(
-                        "w-10 h-10 rounded-lg text-sm font-medium transition-colors flex items-center justify-center",
-                        activeSize === size ? "bg-[#B88E2F] text-white" : "bg-[#F9F1E7] text-neutral-900 hover:bg-[#B88E2F]/20"
-                      )}
-                    >
-                      {size}
-                    </button>
-                  ))}
+            {/* Premium Specifications Block */}
+            {showSpecsSection && (
+              <div className="mb-8 p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <Info className="w-4 h-4 text-neutral-400" />
+                  <h4 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider">Specifications</h4>
                 </div>
-              </div>
-            )}
-
-            {/* Color Variants */}
-            {product.colors && (
-              <div className="mb-8">
-                <h4 className="text-sm font-medium text-neutral-400 mb-3">Color</h4>
-                <div className="flex gap-4">
-                  {product.colors.map((color) => (
-                    <button 
-                      key={color.name}
-                      onClick={() => setActiveColor(color.name)}
-                      className={cn(
-                        "w-8 h-8 rounded-full transition-all duration-300",
-                        activeColor === color.name ? "ring-2 ring-offset-2 ring-neutral-900 scale-110" : "hover:scale-110 opacity-80"
-                      )}
-                      style={{ backgroundColor: color.hex }}
-                      aria-label={color.name}
-                    />
+                
+                <dl className="grid grid-cols-1 divide-y divide-neutral-200/60">
+                  {/* Physical Specs */}
+                  {product.primary_material && (
+                    <div className="py-3 flex justify-between">
+                      <dt className="text-sm text-neutral-500">Primary Material</dt>
+                      <dd className="text-sm font-medium text-neutral-900">{product.primary_material}</dd>
+                    </div>
+                  )}
+                  {product.dimensions && (
+                    <div className="py-3 flex justify-between">
+                      <dt className="text-sm text-neutral-500">Dimensions</dt>
+                      <dd className="text-sm font-medium text-neutral-900">{product.dimensions}</dd>
+                    </div>
+                  )}
+                  
+                  {/* Dynamic Specs */}
+                  {hasDynamicSpecs && Object.entries(product.specifications).map(([key, value]) => (
+                    <div key={key} className="py-3 flex justify-between">
+                      <dt className="text-sm text-neutral-500 capitalize">{key}</dt>
+                      <dd className="text-sm font-medium text-neutral-900">{value}</dd>
+                    </div>
                   ))}
-                </div>
+                </dl>
               </div>
             )}
 
@@ -238,24 +312,25 @@ export default function ProductDetailPage({
               </div>
               <button 
                 onClick={handleAddToCart}
-                className="px-10 py-3 rounded-full border border-neutral-900 font-medium tracking-wide hover:bg-neutral-900 hover:text-white transition-colors"
+                disabled={product.stock_quantity <= 0}
+                className="px-10 py-3 rounded-full border border-neutral-900 bg-neutral-900 text-white font-medium tracking-wide hover:bg-neutral-800 transition-colors disabled:opacity-50"
               >
-                Add To Cart
+                {product.stock_quantity > 0 ? "Add To Cart" : "Out of Stock"}
               </button>
               <button 
                 onClick={() => toggleWishlist(product.id)}
-                className="px-10 py-3 rounded-full border border-neutral-900 flex items-center gap-2 font-medium hover:bg-neutral-900 hover:text-white transition-colors group"
+                className="px-10 py-3 rounded-full border border-neutral-900 flex items-center gap-2 font-medium hover:bg-neutral-50 transition-colors group"
               >
-                <Heart className={cn("w-5 h-5", wishlist.includes(product.id) ? "fill-red-500 text-red-500" : "group-hover:text-white")} />
+                <Heart className={cn("w-5 h-5", wishlist.includes(product.id) ? "fill-red-500 text-red-500" : "group-hover:text-neutral-900 text-neutral-600")} />
                 Wishlist
               </button>
             </div>
 
             {/* Meta */}
             <div className="flex flex-col gap-3 text-sm text-neutral-400">
-              <div className="flex"><span className="w-24">SKU</span><span className="text-neutral-500">: {product.sku || `SS00${product.id}`}</span></div>
-              <div className="flex"><span className="w-24">Category</span><span className="text-neutral-500">: {product.category || "Sofas"}</span></div>
-              <div className="flex"><span className="w-24">Tags</span><span className="text-neutral-500">: {product.tags?.join(", ") || "Furniture"}</span></div>
+              <div className="flex"><span className="w-24">SKU</span><span className="text-neutral-500">: {product.sku || "N/A"}</span></div>
+              <div className="flex"><span className="w-24">Category</span><span className="text-neutral-500">: {product.category || "General"}</span></div>
+              <div className="flex"><span className="w-24">Stock</span><span className="text-neutral-500">: {product.stock_quantity > 0 ? `${product.stock_quantity} available` : "Out of stock"}</span></div>
               <div className="flex items-center">
                 <span className="w-24">Share</span>
                 <div className="flex gap-4 text-neutral-900">
@@ -267,69 +342,6 @@ export default function ProductDetailPage({
           </div>
         </div>
       </div>
-
-      {/* Tabs Section */}
-      <div className="border-t border-neutral-200 pt-12 pb-20 product-animate">
-        <div className="container mx-auto px-6 md:px-12">
-          <div className="flex flex-wrap justify-center gap-8 md:gap-16 mb-10">
-            {["Description", "Additional Information", "Reviews [5]"].map(tab => (
-              <button 
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={cn(
-                  "text-xl font-medium transition-colors",
-                  activeTab === tab ? "text-neutral-900" : "text-neutral-400 hover:text-neutral-600"
-                )}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-          <div className="max-w-4xl mx-auto text-neutral-500 leading-relaxed space-y-6">
-            {activeTab === "Description" && (
-              <>
-                <p>Embodying the raw, wayward spirit of rock &lsquo;n&rsquo; roll, the Kilburn portable active stereo speaker takes the unmistakable look and sound of Marshall, unplugs the chords, and takes the show on the road.</p>
-                <p>Weighing in under 7 pounds, the Kilburn is a lightweight piece of vintage styled engineering. Setting the bar as one of the loudest speakers in its class, the Kilburn is a compact, stout-hearted hero with a well-balanced audio which boasts a clear midrange and extended highs for a sound that is both articulate and pronounced. The analogue knobs allow you to fine tune the controls to your personal preferences while the guitar-influenced leather strap enables easy and stylish travel.</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-10">
-                  <div className="relative aspect-[4/3] bg-[#F9F1E7] rounded-xl overflow-hidden"><Image src={galleryImages[0]} alt="Detail 1" fill className="object-cover" /></div>
-                  <div className="relative aspect-[4/3] bg-[#F9F1E7] rounded-xl overflow-hidden"><Image src={galleryImages[Math.min(1, galleryImages.length - 1)]} alt="Detail 2" fill className="object-cover" /></div>
-                </div>
-              </>
-            )}
-            {activeTab === "Additional Information" && <p className="text-center py-10">Weight: 7 lbs<br/>Dimensions: 10 x 5 x 5 in<br/>Materials: Leather, Brass, Birch Wood</p>}
-            {activeTab === "Reviews [5]" && <p className="text-center py-10">No reviews yet for this aesthetic piece. Be the first to review!</p>}
-          </div>
-        </div>
-      </div>
-
-      {/* Related Products */}
-      {relatedProducts.length > 0 && (
-        <div className="border-t border-neutral-200 py-16 product-animate bg-neutral-50">
-          <div className="container mx-auto px-6 md:px-12">
-            <h2 className="text-3xl font-serif text-center mb-12">Related Products</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {relatedProducts.map((rp) => (
-                <div key={rp.id} className="product-card group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 relative">
-                  <Link href={`/shop/${rp.id}`} className="relative aspect-[4/5] overflow-hidden bg-neutral-100 block">
-                    <Image src={rp.image} alt={rp.name} fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
-                  </Link>
-                  <div className="absolute top-0 left-0 w-full aspect-[4/5] bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                    <button onClick={(e) => { e.preventDefault(); addToCart(rp.id); }} className="bg-white text-neutral-900 px-6 py-3 rounded-full font-medium tracking-wide hover:bg-neutral-100 transition-colors transform translate-y-4 group-hover:translate-y-0 duration-300 pointer-events-auto">Add to cart</button>
-                  </div>
-                  <button onClick={(e) => { e.preventDefault(); toggleWishlist(rp.id); }} className={cn("absolute top-4 right-4 w-10 h-10 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center transition-colors z-10", wishlist.includes(rp.id) ? "text-red-500" : "text-neutral-600 hover:text-red-500")}>
-                    <Heart className="w-5 h-5" fill={wishlist.includes(rp.id) ? "currentColor" : "none"} />
-                  </button>
-                  <div className="p-6 flex flex-col flex-grow">
-                    <Link href={`/shop/${rp.id}`}><h3 className="font-medium text-xl tracking-wide text-neutral-900 mb-1 hover:text-neutral-600 transition-colors">{rp.name}</h3></Link>
-                    <p className="text-sm text-neutral-500 mb-4">{rp.desc}</p>
-                    <span className="font-semibold text-lg">{rp.price}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       <AuthModal />
       <CartDrawer />
