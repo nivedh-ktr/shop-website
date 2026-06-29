@@ -6,22 +6,30 @@ import { User, ShoppingBag, Heart } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { cn } from "@/utils/cn";
 import { useAppContext } from "@/context/AppContext";
+import { useCartStore } from "@/store/cartStore";
 import gsap from "gsap";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
-  const { cartCount, wishlist, setAuthOpen, setCartOpen, setWishlistOpen } = useAppContext();
+  const { wishlist, setAuthOpen, setCartOpen, setWishlistOpen } = useAppContext();
+  const cartCount = useCartStore((state) => state.totalItems());
   const cartBadgeRef = useRef<HTMLSpanElement>(null);
 
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    if (cartCount > 0 && cartBadgeRef.current) {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && cartCount > 0 && cartBadgeRef.current) {
       gsap.fromTo(
         cartBadgeRef.current,
         { scale: 0.5 },
         { scale: 1, duration: 0.5, ease: "elastic.out(1, 0.4)" }
       );
     }
-  }, [cartCount]);
+  }, [cartCount, mounted]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -39,7 +47,7 @@ export default function Header() {
       )}
     >
       <div className="container mx-auto px-6 md:px-12 flex items-center justify-between">
-        <Link href="/#hero" className="font-serif text-2xl md:text-3xl tracking-wide font-medium text-left text-neutral-900">
+        <Link href="/" className="font-serif text-2xl md:text-3xl tracking-wide font-medium text-left text-neutral-900">
           KRISHNA FURNITURE
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium tracking-wide">
@@ -63,9 +71,11 @@ export default function Header() {
           </button>
           <button onClick={() => setCartOpen(true)} className="hover:text-neutral-500 transition-colors relative" aria-label="Cart">
             <ShoppingBag className="w-5 h-5" />
-            <span ref={cartBadgeRef} className="absolute -top-1.5 -right-1.5 bg-neutral-900 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full">
-              {cartCount}
-            </span>
+            {mounted && cartCount > 0 && (
+              <span ref={cartBadgeRef} className="absolute -top-1.5 -right-1.5 bg-neutral-900 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full">
+                {cartCount}
+              </span>
+            )}
           </button>
         </div>
       </div>

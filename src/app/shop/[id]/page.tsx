@@ -12,6 +12,7 @@ import CartDrawer from "@/components/CartDrawer";
 import WishlistDrawer from "@/components/WishlistDrawer";
 import { products as staticProducts } from "@/utils/products";
 import { useAppContext } from "@/context/AppContext";
+import { useCartStore } from "@/store/cartStore";
 import { cn } from "@/utils/cn";
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
@@ -63,7 +64,8 @@ export default function ProductDetailPage({
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState("Description");
   
-  const { addToCart, toggleWishlist, wishlist } = useAppContext();
+  const { toggleWishlist, wishlist } = useAppContext();
+  const addToCart = useCartStore((state) => state.addToCart);
   const pageRef = useRef<HTMLDivElement>(null);
   const mainImageRef = useRef<HTMLImageElement>(null);
 
@@ -155,8 +157,17 @@ export default function ProductDetailPage({
   };
 
   const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      addToCart(productId);
+    if (product) {
+      const displayImage = product.images && product.images.length > 0 ? product.images[0] : product.image_url;
+      addToCart({
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        discount_price: product.discount_price,
+        image_url: displayImage || '',
+        category: product.category
+      }, quantity);
+      toast.success("Added to cart");
     }
   };
 

@@ -4,10 +4,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { toast } from "sonner";
 import { supabase } from "@/utils/supabase";
 
-export interface CartItem {
-  id: string | number;
-  quantity: number;
-}
 
 export interface CheckoutData {
   firstName: string;
@@ -26,13 +22,7 @@ export interface CheckoutData {
 }
 
 interface AppContextType {
-  cartItems: CartItem[];
-  cartCount: number;
-  addToCart: (productId?: string | number) => void;
-  incrementCart: (productId?: string | number) => void; // for backwards compatibility
-  removeFromCart: (productId: string | number) => void;
-  updateCartQuantity: (productId: string | number, quantity: number) => void;
-  
+
   wishlist: (string | number)[];
   toggleWishlist: (productId: string | number) => void;
   
@@ -55,7 +45,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<(string | number)[]>([]);
   
   const [isAuthOpen, setAuthOpen] = useState(false);
@@ -82,36 +71,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0);
-
-  const addToCart = (productId?: string | number) => {
-    // Default to a specific product for demo purposes if none provided
-    const id = productId ?? 1;
-    
-    setCartItems(prev => {
-      const existing = prev.find(item => item.id === id);
-      if (existing) {
-        return prev.map(item => item.id === id ? { ...item, quantity: item.quantity + 1 } : item);
-      }
-      return [...prev, { id, quantity: 1 }];
-    });
-    
-    toast.success("Added to cart");
-  };
-
-  const incrementCart = addToCart;
-
-  const removeFromCart = (productId: string | number) => {
-    setCartItems(prev => prev.filter(item => item.id !== productId));
-  };
-
-  const updateCartQuantity = (productId: string | number, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    setCartItems(prev => prev.map(item => item.id === productId ? { ...item, quantity } : item));
-  };
 
   const toggleWishlist = (productId: string | number) => {
     setWishlist(prev => {
@@ -130,12 +89,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        cartItems,
-        cartCount,
-        addToCart,
-        incrementCart: addToCart,
-        removeFromCart,
-        updateCartQuantity,
         wishlist,
         toggleWishlist,
         isAuthOpen,

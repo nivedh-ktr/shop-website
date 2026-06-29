@@ -6,6 +6,9 @@ import { Heart } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { cn } from "@/utils/cn";
 
+import { toast } from "sonner";
+import { useCartStore } from "@/store/cartStore";
+
 export interface ProductCardProps {
   id: string;
   title: string;
@@ -16,10 +19,26 @@ export interface ProductCardProps {
 }
 
 export default function ProductCard({ id, title, price, discount_price, image_url, category }: ProductCardProps) {
-  const { addToCart, wishlist, toggleWishlist } = useAppContext();
+  const { wishlist, toggleWishlist } = useAppContext();
+  const addToCart = useCartStore((state) => state.addToCart);
   
   const formatPrice = (val: number) => 
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    addToCart({
+      id,
+      title,
+      price,
+      discount_price,
+      image_url,
+      category
+    }, 1);
+    toast.success(`${title} successfully added to your cart!`, {
+      position: "bottom-right"
+    });
+  };
 
   return (
     <div className="product-card group flex flex-col bg-white rounded-2xl overflow-hidden relative border border-neutral-100 shadow-sm hover:shadow-md transition-shadow duration-300">
@@ -42,7 +61,7 @@ export default function ProductCard({ id, title, price, discount_price, image_ur
       {/* Hover Overlay Actions */}
       <div className="absolute top-0 left-0 w-full aspect-[4/5] bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
         <button 
-          onClick={(e) => { e.preventDefault(); addToCart(id); }}
+          onClick={handleAddToCart}
           className="bg-white text-neutral-900 px-8 py-3 rounded-full font-medium tracking-wide hover:bg-neutral-100 transition-colors transform translate-y-4 group-hover:translate-y-0 duration-300 pointer-events-auto shadow-lg"
         >
           Add to cart

@@ -7,8 +7,11 @@ import { useAppContext } from "@/context/AppContext";
 import { products } from "@/utils/products";
 import Image from "next/image";
 
+import { useCartStore } from "@/store/cartStore";
+
 export default function WishlistDrawer() {
-  const { isWishlistOpen, setWishlistOpen, wishlist, toggleWishlist, addToCart } = useAppContext();
+  const { isWishlistOpen, setWishlistOpen, wishlist, toggleWishlist } = useAppContext();
+  const addToCart = useCartStore((state) => state.addToCart);
   const drawerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -26,9 +29,16 @@ export default function WishlistDrawer() {
 
   const wishlistDetails = wishlist.map((id) => products.find((p) => p.id === id)).filter(Boolean);
 
-  const handleMoveToCart = (id: number) => {
-    addToCart(id);
-    toggleWishlist(id);
+  const handleMoveToCart = (product: any) => {
+    addToCart({
+      id: product.id,
+      title: product.name,
+      price: parseInt(product.price.replace(/[^\d]/g, ''), 10), // This is a bit brittle, but handles the static mock product price string
+      discount_price: product.oldPrice ? parseInt(product.oldPrice.replace(/[^\d]/g, ''), 10) : null,
+      image_url: product.image,
+      category: product.category || 'General'
+    }, 1);
+    toggleWishlist(product.id);
   };
 
   return (
@@ -69,8 +79,8 @@ export default function WishlistDrawer() {
                   
                   <div className="mt-auto flex items-center justify-between pt-2 border-t border-neutral-200">
                     <button 
-                      onClick={() => handleMoveToCart(product!.id)}
-                      className="text-xs font-medium uppercase tracking-wide hover:text-neutral-500 transition-colors"
+                      onClick={() => handleMoveToCart(product)}
+                      className="text-sm font-medium hover:text-neutral-500 transition-colors"
                     >
                       Move to Cart
                     </button>

@@ -11,9 +11,11 @@ import CartDrawer from "@/components/CartDrawer";
 import WishlistDrawer from "@/components/WishlistDrawer";
 import { useAppContext } from "@/context/AppContext";
 import { products } from "@/utils/products";
+import { useCartStore } from "@/store/cartStore";
 
 export default function ConfirmationPage() {
-  const { checkoutData, cartItems } = useAppContext();
+  const { checkoutData } = useAppContext();
+  const { items: cartItems } = useCartStore();
   const pageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,11 +58,6 @@ export default function ConfirmationPage() {
       return;
     }
 
-    const populatedCart = cartItems.map(item => ({
-      ...item,
-      product: products.find(p => p.id === item.id)
-    })).filter(item => item.product !== undefined);
-
     let message = `*NEW ORDER REQUEST* | ${checkoutData.orderId}\n\n`;
     message += `*CUSTOMER DETAILS*\n`;
     message += `Name: ${checkoutData.firstName} ${checkoutData.lastName}\n`;
@@ -71,9 +68,10 @@ export default function ConfirmationPage() {
     if (checkoutData.notes) message += `Notes: ${checkoutData.notes}\n`;
     
     message += `\n*ORDER ITEMS*\n`;
-    populatedCart.forEach((item, index) => {
-      const itemFormatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(item.product!.priceValue * item.quantity);
-      message += `${index + 1}. ${item.product?.name} (x${item.quantity}) - ${itemFormatted}\n`;
+    cartItems.forEach((item, index) => {
+      const effectivePrice = item.discount_price && item.discount_price > 0 ? item.discount_price : item.price;
+      const itemFormatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(effectivePrice * item.quantity);
+      message += `${index + 1}. ${item.title} (x${item.quantity}) - ${itemFormatted}\n`;
     });
 
     message += `\n*TOTAL DUE*: ${checkoutData.subtotal}\n`;

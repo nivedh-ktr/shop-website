@@ -12,6 +12,7 @@ import CartDrawer from "@/components/CartDrawer";
 import WishlistDrawer from "@/components/WishlistDrawer";
 import { products } from "@/utils/products";
 import { useAppContext } from "@/context/AppContext";
+import { useCartStore } from "@/store/cartStore";
 import { cn } from "@/utils/cn";
 
 const TABS = ["All Collections", "Best Sellers", "New Arrivals", "Limited Edition", "Designer Picks"];
@@ -20,7 +21,8 @@ export default function CollectionsPage() {
   const [activeTab, setActiveTab] = useState("All Collections");
   const pageRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const { addToCart, wishlist, toggleWishlist } = useAppContext();
+  const { wishlist, toggleWishlist } = useAppContext();
+  const addToCart = useCartStore((state) => state.addToCart);
 
   // Handle Entrance Animation & Lenis Top Scroll
   useEffect(() => {
@@ -109,14 +111,24 @@ export default function CollectionsPage() {
               </Link>
                 
               {/* Hover Actions */}
-              <div className="absolute top-0 left-0 w-full aspect-square bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                <button 
-                  onClick={(e) => { e.preventDefault(); addToCart(product.id); }}
-                  className="bg-white text-neutral-900 px-6 py-3 rounded-full font-medium tracking-wide hover:bg-neutral-100 transition-colors transform translate-y-4 group-hover:translate-y-0 duration-300 pointer-events-auto"
-                >
-                  Add to cart
-                </button>
-              </div>
+                <div className="absolute top-0 left-0 w-full aspect-square bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                  <button 
+                    onClick={(e) => { 
+                      e.preventDefault(); 
+                      addToCart({
+                        id: product.id.toString(),
+                        title: product.name,
+                        price: parseInt(product.price.replace(/[^\d]/g, ''), 10),
+                        discount_price: product.oldPrice ? parseInt(product.oldPrice.replace(/[^\d]/g, ''), 10) : null,
+                        image_url: product.image,
+                        category: product.category || 'General'
+                      }, 1); 
+                    }}
+                    className="bg-white text-neutral-900 px-6 py-3 rounded-full font-medium tracking-wide hover:bg-neutral-100 transition-colors transform translate-y-4 group-hover:translate-y-0 duration-300 pointer-events-auto"
+                  >
+                    Add to cart
+                  </button>
+                </div>
               <button 
                 onClick={(e) => { e.preventDefault(); toggleWishlist(product.id); }}
                 className={cn(

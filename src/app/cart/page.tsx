@@ -11,10 +11,12 @@ import AuthModal from "@/components/AuthModal";
 import CartDrawer from "@/components/CartDrawer";
 import WishlistDrawer from "@/components/WishlistDrawer";
 import { useAppContext } from "@/context/AppContext";
+import { useCartStore } from "@/store/cartStore";
 import { products } from "@/utils/products";
 
 export default function CartPage() {
-  const { cartItems, removeFromCart, updateCartQuantity, isLoggedIn, setAuthOpen } = useAppContext();
+  const { isLoggedIn, setAuthOpen } = useAppContext();
+  const { items: cartItems, removeFromCart, updateQuantity: updateCartQuantity, subtotal } = useCartStore();
   const pageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,13 +37,7 @@ export default function CartPage() {
     return () => ctx.revert();
   }, []);
 
-  const populatedCart = cartItems.map(item => ({
-    ...item,
-    product: products.find(p => p.id === item.id)
-  })).filter(item => item.product !== undefined);
-
-  const subtotal = populatedCart.reduce((sum, item) => sum + (item.product!.priceValue * item.quantity), 0);
-  const formattedSubtotal = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(subtotal);
+  const formattedSubtotal = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(subtotal());
 
   return (
     <main ref={pageRef} className="min-h-screen pt-24 bg-white overflow-hidden flex flex-col">
@@ -73,10 +69,10 @@ export default function CartPage() {
       </div>
 
       <div className="container mx-auto px-6 md:px-12 py-16 flex-grow">
-        {populatedCart.length === 0 ? (
+        {cartItems.length === 0 ? (
           <div className="text-center py-20 cart-animate">
             <h2 className="text-3xl font-serif text-neutral-900 mb-6">Your cart is empty</h2>
-            <Link href="/collections" className="inline-block px-10 py-4 bg-neutral-900 text-white rounded-full font-medium hover:bg-neutral-800 transition-colors">
+            <Link href="/collections" className="inline-block px-10 py-4 bg-neutral-900 text-white rounded-full font-medium tracking-wide hover:bg-neutral-800 transition-colors">
               Continue Shopping
             </Link>
           </div>
@@ -97,33 +93,44 @@ export default function CartPage() {
               
               {/* Items List */}
               <div className="flex flex-col gap-6 md:gap-0">
-                {populatedCart.map((item, idx) => {
-                  const product = item.product!;
-                  const itemSubtotal = product.priceValue * item.quantity;
+                {cartItems.map((item, idx) => {
+                  const effectivePrice = item.discount_price && item.discount_price > 0 ? item.discount_price : item.price;
+                  const itemSubtotal = effectivePrice * item.quantity;
                   const formattedItemSubtotal = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(itemSubtotal);
                   
                   return (
                     <div key={`${item.id}-${idx}`} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-white md:p-6 border-b border-neutral-200 pb-6 md:pb-0 pt-6 md:pt-0">
                       
                       {/* Mobile Title */}
-                      <div className="md:hidden font-medium text-lg mb-2">{product.name}</div>
+                      <div className="md:hidden font-medium text-lg mb-2">{item.title}</div>
                       
                       {/* Image */}
-                      <Link href={`/shop/${product.id}`} className="md:col-span-2 flex items-center justify-center bg-[#F9F1E7] rounded-xl overflow-hidden aspect-square relative group">
-                        <Image src={product.image} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <Link href={`/shop/${item.id}`} className="md:col-span-2 flex items-center justify-center bg-[#F9F1E7] rounded-xl overflow-hidden aspect-square relative group">
+                        {item.image_url ? (
+                          <Image src={item.image_url} alt={item.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-neutral-400">No Image</div>
+                        )}
                       </Link>
                       
                       {/* Name */}
                       <div className="hidden md:block col-span-3 font-medium text-neutral-500">
-                        <Link href={`/shop/${product.id}`} className="hover:text-neutral-900 transition-colors">
-                          {product.name}
+                        <Link href={`/shop/${item.id}`} className="hover:text-neutral-900 transition-colors">
+                          {item.title}
                         </Link>
+                        {item.selectedSpecs && Object.keys(item.selectedSpecs).length > 0 && (
+                          <div className="text-xs text-neutral-400 mt-1 space-y-0.5">
+                            {Object.entries(item.selectedSpecs).map(([key, value]) => (
+                              <div key={key}><span className="capitalize">{key.replace('_', ' ')}</span>: {value as string}</div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Price */}
                       <div className="md:col-span-2 text-neutral-500 md:text-center">
                         <span className="md:hidden font-medium mr-2">Price:</span>
-                        {product.price}
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(effectivePrice)}
                       </div>
                       
                       {/* Quantity */}
@@ -241,7 +248,7 @@ export default function CartPage() {
       </div>
 
       {/* Cross-Sell Carousel */}
-      {populatedCart.length > 0 && (
+      {cartItems.length > 0 && (
         <div className="bg-[#F9F1E7] py-20 cart-animate border-t border-neutral-200 mt-auto">
           <div className="container mx-auto px-6 md:px-12">
             <h2 className="text-3xl font-serif text-neutral-900 mb-10 text-center">You may also like...</h2>

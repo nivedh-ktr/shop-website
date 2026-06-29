@@ -2,20 +2,68 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import { supabase } from "@/utils/supabase";
+import SearchBar from "@/components/SearchBar";
+import ProductGridSkeleton from "@/components/ProductGridSkeleton";
+import { Suspense } from "react";
 
 export const revalidate = 0; // Ensure fresh data fetching
 
-export default async function ShopPage() {
-  const { data: products, error } = await supabase
+async function ShopProductGrid({ query }: { query?: string }) {
+  let productsQuery = supabase
     .from('products')
     .select('id, title, price, discount_price, images, image_url, category')
     .order('created_at', { ascending: false });
+
+  if (query) {
+    productsQuery = productsQuery.ilike('title', `%${query}%`);
+  }
+
+  const { data: products, error } = await productsQuery;
 
   if (error) {
     console.error("Error fetching products:", error);
   }
 
   const safeProducts = products || [];
+
+  if (safeProducts.length === 0) {
+    return (
+      <div className="py-24 text-center bg-white rounded-3xl border border-neutral-200/60 shadow-sm">
+        <h2 className="text-2xl font-serif text-neutral-900 mb-3">No Products Found</h2>
+        <p className="text-neutral-500 mb-8">We couldn&apos;t find any products matching your search right now. Please check back later.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+      {safeProducts.map((product) => {
+        const displayImage = (product.images && product.images.length > 0) 
+          ? product.images[0] 
+          : (product.image_url || '');
+
+        return (
+          <ProductCard 
+            key={product.id}
+            id={product.id}
+            title={product.title}
+            price={product.price}
+            discount_price={product.discount_price}
+            image_url={displayImage}
+            category={product.category}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+export default async function ShopPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ query?: string }>;
+}) {
+  const { query } = await searchParams;
 
   return (
     <main className="min-h-screen bg-neutral-50 flex flex-col">
@@ -27,33 +75,11 @@ export default async function ShopPage() {
           <p className="text-neutral-500 max-w-2xl">Discover our complete range of premium, handcrafted furniture designed to elevate your living spaces.</p>
         </div>
 
-        {safeProducts.length === 0 ? (
-          <div className="py-24 text-center bg-white rounded-3xl border border-neutral-200/60 shadow-sm">
-            <h2 className="text-2xl font-serif text-neutral-900 mb-3">No Products Found</h2>
-            <p className="text-neutral-500 mb-8">We couldn't find any products in our database right now. Please check back later.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {safeProducts.map((product) => {
-              // Ensure we use the new images array if available, otherwise fallback to legacy image_url
-              const displayImage = (product.images && product.images.length > 0) 
-                ? product.images[0] 
-                : (product.image_url || '');
+        <SearchBar />
 
-              return (
-                <ProductCard 
-                  key={product.id}
-                  id={product.id}
-                  title={product.title}
-                  price={product.price}
-                  discount_price={product.discount_price}
-                  image_url={displayImage}
-                  category={product.category}
-                />
-              );
-            })}
-          </div>
-        )}
+        <Suspense fallback={<ProductGridSkeleton />} key={query || 'shop'}>
+          <ShopProductGrid query={query} />
+        </Suspense>
       </div>
 
       <Footer />

@@ -7,17 +7,18 @@ import ProductCard from "./ProductCard";
 
 interface ProductGridProps {
   featuredProducts?: any[];
+  disableAnimation?: boolean;
 }
 
-export default function ProductGrid({ featuredProducts = [] }: ProductGridProps) {
+export default function ProductGrid({ featuredProducts = [], disableAnimation = false }: ProductGridProps) {
   const containerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (containerRef.current && featuredProducts.length > 0) {
+    if (containerRef.current && featuredProducts.length > 0 && !disableAnimation) {
       const elements = containerRef.current.querySelectorAll(".product-card");
       animateWateryReveal(containerRef.current, Array.from(elements));
     }
-  }, [featuredProducts]);
+  }, [featuredProducts, disableAnimation]);
 
   return (
     <section id="products" ref={containerRef} className="py-24 bg-neutral-50">

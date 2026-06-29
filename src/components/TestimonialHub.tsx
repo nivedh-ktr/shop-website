@@ -58,7 +58,7 @@ export default function TestimonialHub() {
                   <Star key={i} className="w-5 h-5 fill-current" />
                 ))}
               </div>
-              <p className="text-neutral-700 leading-relaxed mb-8 italic flex-grow">"{t.text}"</p>
+              <p className="text-neutral-700 leading-relaxed mb-8 italic flex-grow">&quot;{t.text}&quot;</p>
               <div className="flex items-center gap-4 mt-auto">
                 <div className="relative w-12 h-12 rounded-full overflow-hidden">
                   <Image src={t.image} alt={t.name} fill className="object-cover" />
